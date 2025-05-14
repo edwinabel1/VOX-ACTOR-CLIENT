@@ -1,0 +1,66 @@
+<!-- 文件：voice_wav.html -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>VOX-ACTOR 实时语音翻译</title>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #eee; padding: 2em; }
+    button { font-size: 1.2em; padding: 1em; margin: 1em 0; }
+    #result { margin-top: 2em; white-space: pre-wrap; background: #222; padding: 1em; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🎙️ VOX-ACTOR 浏览器录音</h1>
+  <button id="record">🔴 开始录音</button>
+  <button id="stop" disabled>⏹️ 停止并发送</button>
+
+  <div id="result">等待操作...</div>
+
+  <script src="https://cdn.jsdelivr.net/gh/mattdiamond/Recorderjs@master/dist/recorder.js"></script>
+  <script>
+    let recorder;
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const input = audioContext.createMediaStreamSource(stream);
+      recorder = new Recorder(input, { numChannels: 1 });
+
+      document.getElementById("record").onclick = () => {
+        recorder.record();
+        document.getElementById("result").innerText = "🎙️ 正在录音...";
+        document.getElementById("record").disabled = true;
+        document.getElementById("stop").disabled = false;
+      };
+
+      document.getElementById("stop").onclick = () => {
+        recorder.stop();
+        recorder.exportWAV(blob => {
+          const formData = new FormData();
+          formData.append("file", blob, "speech.wav");
+
+          document.getElementById("result").innerText = "⏳ 上传中...";
+
+          fetch("http://localhost:8000/transcribe", {
+            method: "POST",
+            body: formData
+          })
+          .then(res => res.json())
+          .then(data => {
+            document.getElementById("result").innerText =
+              `🗣 语言: ${data.language}\n` +
+              `📜 转录: ${data.transcript}\n` +
+              `🧠 GPT输出: ${data.gpt_result}`;
+          })
+          .catch(err => {
+            document.getElementById("result").innerText = `❌ 错误: ${err}`;
+          });
+        });
+
+        document.getElementById("record").disabled = false;
+        document.getElementById("stop").disabled = true;
+      };
+    });
+  </script>
+</body>
+</html>
